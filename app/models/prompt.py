@@ -7,9 +7,10 @@ from app.models.base import Base, TimestampMixin
 class Prompt(Base, TimestampMixin):
     """
     Represent a system prompt used by the AI engine.
+
     Prompts can be managed dynamically without redeploying the application.
     """
-    
+
     __tablename__ = "prompts"
 
     id: Mapped[int] = mapped_column(primary_key=True)
