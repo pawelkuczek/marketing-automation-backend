@@ -6,7 +6,7 @@ from fastapi import status
 from fastapi.testclient import TestClient
 from openpyxl import Workbook
 
-from app.api.routers.excel import get_excel_service
+from app.api.routers.excel import get_calendar_processing_service
 from app.main import app
 
 client = TestClient(app)
@@ -49,7 +49,7 @@ def create_valid_excel_bytes() -> bytes:
 def override_excel_service(mock_service: AsyncMock) -> None:
     """Override the ExcelProcessorService dependency."""
 
-    app.dependency_overrides[get_excel_service] = lambda: mock_service
+    app.dependency_overrides[get_calendar_processing_service] = lambda: mock_service
 
 
 def clear_dependency_overrides() -> None:

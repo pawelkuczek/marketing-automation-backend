@@ -98,3 +98,52 @@ async def test_get_all_returns_prompts_ordered_by_created_at_desc(
         "Middle Prompt",
         "Old Prompt",
     ]
+
+
+@pytest.mark.asyncio
+async def test_get_active_returns_active_prompt(
+    db_session: AsyncSession,
+) -> None:
+    """Return the currently active prompt."""
+
+    inactive_prompt = Prompt(
+        name="Inactive Prompt",
+        content="Historical prompt content.",
+        is_active=False,
+    )
+
+    active_prompt = Prompt(
+        name="Active Prompt",
+        content="Current prompt content.",
+        is_active=True,
+    )
+
+    db_session.add_all(
+        [
+            inactive_prompt,
+            active_prompt,
+        ]
+    )
+    await db_session.commit()
+
+    repository = PromptRepository(session=db_session)
+
+    result = await repository.get_active()
+
+    assert result is not None
+    assert result.id == active_prompt.id
+    assert result.name == "Active Prompt"
+    assert result.is_active is True
+
+
+@pytest.mark.asyncio
+async def test_get_active_returns_none_when_no_active_prompt(
+    db_session: AsyncSession,
+) -> None:
+    """Return None when no active prompt exists."""
+
+    repository = PromptRepository(session=db_session)
+
+    result = await repository.get_active()
+
+    assert result is None
