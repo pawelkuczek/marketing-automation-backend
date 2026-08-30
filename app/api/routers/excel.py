@@ -5,8 +5,13 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.database import get_db
+from app.repositories.prompt import PromptRepository
+from app.services.calendar_processing import CalendarProcessingService
 from app.services.excel_processor import ExcelProcessorService
+from app.services.llm import get_llm_service
 
 logger = logging.getLogger(__name__)
 
@@ -16,17 +21,24 @@ router = APIRouter(
 )
 
 
-def get_excel_service() -> ExcelProcessorService:
-    """Provide an ExcelProcessorService instance."""
-    return ExcelProcessorService()
+def get_calendar_processing_service(
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> CalendarProcessingService:
+    """Provide a configured CalendarProcessingService instance."""
+
+    return CalendarProcessingService(
+        excel_processor=ExcelProcessorService(),
+        prompt_repository=PromptRepository(session=session),
+        llm_service=get_llm_service(),
+    )
 
 
 @router.post("/process-calendar")
 async def process_calendar(
     file: Annotated[UploadFile, File()],
     service: Annotated[
-        ExcelProcessorService,
-        Depends(get_excel_service),
+        CalendarProcessingService,
+        Depends(get_calendar_processing_service),
     ],
 ) -> StreamingResponse:
     """
@@ -52,6 +64,15 @@ async def process_calendar(
 
     try:
         processed_bytes = await service.process_calendar_file(file_bytes)
+    except ValueError as exc:
+        logger.warning(
+            "Calendar processing failed: %s",
+            exc,
+        )
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        ) from exc
     except Exception as exc:
         logger.exception("Failed to process Excel file.")
         raise HTTPException(
@@ -63,8 +84,10 @@ async def process_calendar(
 
     return StreamingResponse(
         io.BytesIO(processed_bytes),
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        media_type=(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        ),
         headers={
-            "Content-Disposition": f"attachment; filename*=utf-8''{safe_filename}"
+            "Content-Disposition": (f"attachment; filename*=utf-8''{safe_filename}")
         },
     )

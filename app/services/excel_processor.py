@@ -268,25 +268,61 @@ class ExcelProcessorService:
     ) -> bytes:
         """Process the marketing calendar Excel file."""
 
-        workbook = await asyncio.to_thread(
+        workbook = await self.load_workbook(file_bytes)
+
+        requests = await self.collect_generation_requests(workbook)
+
+        results = self._generate_mock_results(requests)
+
+        processed_workbook = await self.apply_generation_results(
+            workbook,
+            results,
+        )
+
+        return await self.save_workbook(processed_workbook)
+
+    async def load_workbook(
+        self,
+        file_bytes: bytes,
+    ) -> Workbook:
+        """Load an Excel workbook without blocking the event loop."""
+
+        return await asyncio.to_thread(
             self._load_workbook_sync,
             file_bytes,
         )
 
-        requests = await asyncio.to_thread(
+    async def collect_generation_requests(
+        self,
+        workbook: Workbook,
+    ) -> list[GenerationRequest]:
+        """Collect rows requiring generated marketing content."""
+
+        return await asyncio.to_thread(
             self._collect_generation_requests_sync,
             workbook,
         )
 
-        results = self._generate_mock_results(requests)
+    async def apply_generation_results(
+        self,
+        workbook: Workbook,
+        results: list[GenerationResult],
+    ) -> Workbook:
+        """Apply generated results without blocking the event loop."""
 
-        processed_workbook = await asyncio.to_thread(
+        return await asyncio.to_thread(
             self._apply_generation_results_sync,
             workbook,
             results,
         )
 
+    async def save_workbook(
+        self,
+        workbook: Workbook,
+    ) -> bytes:
+        """Save an Excel workbook without blocking the event loop."""
+
         return await asyncio.to_thread(
             self._save_workbook_sync,
-            processed_workbook,
+            workbook,
         )
