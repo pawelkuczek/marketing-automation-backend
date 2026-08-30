@@ -49,3 +49,12 @@ class PromptRepository:
         stmt = select(Prompt).where(Prompt.id == prompt_id)
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
+
+    async def get_active(self) -> Prompt | None:
+        """Return the currently active prompt."""
+
+        stmt = select(Prompt).where(Prompt.is_active.is_(True))
+
+        result = await self.session.execute(stmt)
+
+        return result.scalar_one_or_none()
