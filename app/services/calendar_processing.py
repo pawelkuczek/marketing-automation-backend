@@ -51,7 +51,12 @@ class CalendarProcessingService:
             )
 
         if request.generate_hashtags:
-            hashtag_prompt = f"{user_prompt}\nGenerate relevant hashtags for this post."
+            hashtag_prompt = (
+                f"{user_prompt}\n\n"
+                "Generate exactly 5 relevant hashtags and exactly "
+                "5 relevant keywords or short key phrases. "
+                "Return only the hashtags and keywords."
+            )
 
             hashtags = await self.llm_service.generate_text(
                 system_prompt=system_prompt,
