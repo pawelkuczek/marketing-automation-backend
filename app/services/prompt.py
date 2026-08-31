@@ -66,6 +66,31 @@ class PromptService:
             await self.session.rollback()
             raise
 
+    async def activate_prompt(
+        self,
+        prompt_id: int,
+    ) -> Prompt:
+        """Make an existing prompt the active prompt."""
+
+        prompt = await self.get_prompt(prompt_id)
+
+        try:
+            stmt = (
+                update(Prompt).where(Prompt.is_active.is_(True)).values(is_active=False)
+            )
+            await self.session.execute(stmt)
+
+            prompt.is_active = True
+
+            await self.session.commit()
+            await self.session.refresh(prompt)
+
+            return prompt
+
+        except SQLAlchemyError:
+            await self.session.rollback()
+            raise
+
     async def create_new_active_prompt(
         self,
         prompt_data: PromptCreate,

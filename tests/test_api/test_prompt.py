@@ -548,3 +548,80 @@ def test_update_prompt_endpoint_returns_404() -> None:
 
     finally:
         _clear_overrides()
+
+
+def test_activate_prompt_endpoint_success() -> None:
+    """Activate a prompt through the HTTP API."""
+
+    mock_service = AsyncMock()
+
+    activated_prompt = Prompt(
+        id=2,
+        name="Activated Prompt",
+        content="Activated prompt content.",
+        is_active=True,
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
+    )
+
+    mock_service.activate_prompt.return_value = activated_prompt
+
+    _override_prompt_service(mock_service)
+
+    try:
+        response = client.patch("/prompts/2/activate")
+
+        assert response.status_code == status.HTTP_200_OK
+
+        data = response.json()
+
+        assert data["id"] == 2
+        assert data["name"] == "Activated Prompt"
+        assert data["is_active"] is True
+
+        mock_service.activate_prompt.assert_awaited_once_with(2)
+
+    finally:
+        _clear_overrides()
+
+
+def test_activate_prompt_endpoint_returns_404() -> None:
+    """Return 404 when activating a missing prompt."""
+
+    mock_service = AsyncMock()
+
+    mock_service.activate_prompt.side_effect = HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="Prompt not found.",
+    )
+
+    _override_prompt_service(mock_service)
+
+    try:
+        response = client.patch("/prompts/999/activate")
+
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+        assert response.json() == {"detail": "Prompt not found."}
+
+        mock_service.activate_prompt.assert_awaited_once_with(999)
+
+    finally:
+        _clear_overrides()
+
+
+def test_activate_prompt_endpoint_rejects_invalid_id() -> None:
+    """Return validation error when prompt ID is not an integer."""
+
+    mock_service = AsyncMock()
+
+    _override_prompt_service(mock_service)
+
+    try:
+        response = client.patch("/prompts/not-an-integer/activate")
+
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+
+        mock_service.activate_prompt.assert_not_awaited()
+
+    finally:
+        _clear_overrides()

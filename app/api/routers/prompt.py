@@ -91,6 +91,25 @@ async def update_prompt(
     return PromptResponse.model_validate(prompt)
 
 
+@router.patch(
+    "/{prompt_id}/activate",
+    response_model=PromptResponse,
+    summary="Activate an AI prompt",
+)
+async def activate_prompt(
+    prompt_id: int,
+    service: Annotated[
+        PromptService,
+        Depends(get_prompt_service),
+    ],
+) -> PromptResponse:
+    """Make an existing system prompt active."""
+
+    prompt = await service.activate_prompt(prompt_id)
+
+    return PromptResponse.model_validate(prompt)
+
+
 @router.post(
     "",
     response_model=PromptResponse,
