@@ -1,10 +1,11 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from fastapi import HTTPException, status
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.schemas.prompt import PromptCreate
+from app.schemas.prompt import PromptCreate, PromptUpdate
 from app.services.prompt import PromptService
 
 
@@ -14,6 +15,7 @@ def create_mock_session() -> MagicMock:
     session = MagicMock(spec=AsyncSession)
 
     session.execute = AsyncMock()
+    session.delete = AsyncMock()
     session.commit = AsyncMock()
     session.refresh = AsyncMock()
     session.rollback = AsyncMock()
@@ -72,4 +74,345 @@ async def test_create_new_active_prompt_rolls_back_on_database_error() -> None:
     with pytest.raises(SQLAlchemyError):
         await service.create_new_active_prompt(prompt_data)
 
+    mock_session.rollback.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_get_prompts_returns_repository_results() -> None:
+    """Return all prompts provided by the repository."""
+
+    mock_session = create_mock_session()
+    mock_repository = MagicMock()
+    mock_repository.get_all = AsyncMock()
+
+    prompts = [
+        MagicMock(),
+        MagicMock(),
+    ]
+    mock_repository.get_all.return_value = prompts
+
+    service = PromptService(
+        session=mock_session,
+        repository=mock_repository,
+    )
+
+    result = await service.get_prompts()
+
+    assert result == prompts
+    mock_repository.get_all.assert_awaited_once_with()
+
+
+@pytest.mark.asyncio
+async def test_get_prompt_raises_404_when_prompt_does_not_exist() -> None:
+    """Raise 404 when the requested prompt does not exist."""
+
+    mock_session = create_mock_session()
+    mock_repository = MagicMock()
+    mock_repository.get_by_id = AsyncMock(return_value=None)
+
+    service = PromptService(
+        session=mock_session,
+        repository=mock_repository,
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        await service.get_prompt(999)
+
+    assert exc_info.value.status_code == status.HTTP_404_NOT_FOUND
+    assert exc_info.value.detail == "Prompt not found."
+
+    mock_repository.get_by_id.assert_awaited_once_with(999)
+
+
+@pytest.mark.asyncio
+async def test_get_prompt_returns_existing_prompt() -> None:
+    """Return an existing prompt by ID."""
+
+    mock_session = create_mock_session()
+    mock_repository = MagicMock()
+
+    prompt = MagicMock()
+    mock_repository.get_by_id = AsyncMock(return_value=prompt)
+
+    service = PromptService(
+        session=mock_session,
+        repository=mock_repository,
+    )
+
+    result = await service.get_prompt(1)
+
+    assert result is prompt
+    mock_repository.get_by_id.assert_awaited_once_with(1)
+
+
+@pytest.mark.asyncio
+async def test_update_prompt_updates_provided_fields() -> None:
+    """Update only the prompt properties provided by the user."""
+
+    mock_session = create_mock_session()
+    mock_repository = MagicMock()
+
+    prompt = MagicMock()
+    prompt.name = "Original Prompt"
+    prompt.content = "Original prompt content."
+
+    mock_repository.get_by_id = AsyncMock(return_value=prompt)
+
+    service = PromptService(
+        session=mock_session,
+        repository=mock_repository,
+    )
+
+    prompt_data = PromptUpdate(
+        content="Updated prompt content.",
+    )
+
+    result = await service.update_prompt(
+        prompt_id=1,
+        prompt_data=prompt_data,
+    )
+
+    assert result is prompt
+    assert prompt.name == "Original Prompt"
+    assert prompt.content == "Updated prompt content."
+
+    mock_repository.get_by_id.assert_awaited_once_with(1)
+    mock_session.commit.assert_awaited_once()
+    mock_session.refresh.assert_awaited_once_with(prompt)
+
+
+@pytest.mark.asyncio
+async def test_update_prompt_raises_404_when_prompt_does_not_exist() -> None:
+    """Raise 404 when attempting to update a missing prompt."""
+
+    mock_session = create_mock_session()
+    mock_repository = MagicMock()
+    mock_repository.get_by_id = AsyncMock(return_value=None)
+
+    service = PromptService(
+        session=mock_session,
+        repository=mock_repository,
+    )
+
+    prompt_data = PromptUpdate(
+        content="Updated prompt content.",
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        await service.update_prompt(
+            prompt_id=999,
+            prompt_data=prompt_data,
+        )
+
+    assert exc_info.value.status_code == status.HTTP_404_NOT_FOUND
+    assert exc_info.value.detail == "Prompt not found."
+
+    mock_session.commit.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_update_prompt_rolls_back_on_database_error() -> None:
+    """Rollback the transaction when prompt update fails."""
+
+    mock_session = create_mock_session()
+    mock_repository = MagicMock()
+
+    prompt = MagicMock()
+    prompt.name = "Original Prompt"
+    prompt.content = "Original prompt content."
+
+    mock_repository.get_by_id = AsyncMock(return_value=prompt)
+    mock_session.commit.side_effect = SQLAlchemyError("Database error")
+
+    service = PromptService(
+        session=mock_session,
+        repository=mock_repository,
+    )
+
+    prompt_data = PromptUpdate(
+        content="Updated prompt content.",
+    )
+
+    with pytest.raises(SQLAlchemyError):
+        await service.update_prompt(
+            prompt_id=1,
+            prompt_data=prompt_data,
+        )
+
+    mock_session.rollback.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_activate_prompt_makes_prompt_active() -> None:
+    """Deactivate the current prompt and activate the selected prompt."""
+
+    mock_session = create_mock_session()
+    mock_repository = MagicMock()
+
+    prompt = MagicMock()
+    prompt.is_active = False
+
+    mock_repository.get_by_id = AsyncMock(return_value=prompt)
+
+    service = PromptService(
+        session=mock_session,
+        repository=mock_repository,
+    )
+
+    result = await service.activate_prompt(2)
+
+    assert result is prompt
+    assert prompt.is_active is True
+
+    mock_repository.get_by_id.assert_awaited_once_with(2)
+    mock_session.execute.assert_awaited_once()
+    mock_session.commit.assert_awaited_once()
+    mock_session.refresh.assert_awaited_once_with(prompt)
+
+
+@pytest.mark.asyncio
+async def test_activate_prompt_raises_404_when_prompt_does_not_exist() -> None:
+    """Raise 404 when attempting to activate a missing prompt."""
+
+    mock_session = create_mock_session()
+    mock_repository = MagicMock()
+    mock_repository.get_by_id = AsyncMock(return_value=None)
+
+    service = PromptService(
+        session=mock_session,
+        repository=mock_repository,
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        await service.activate_prompt(999)
+
+    assert exc_info.value.status_code == status.HTTP_404_NOT_FOUND
+    assert exc_info.value.detail == "Prompt not found."
+
+    mock_session.execute.assert_not_awaited()
+    mock_session.commit.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_activate_prompt_rolls_back_on_database_error() -> None:
+    """Rollback the transaction when prompt activation fails."""
+
+    mock_session = create_mock_session()
+    mock_repository = MagicMock()
+
+    prompt = MagicMock()
+    prompt.is_active = False
+
+    mock_repository.get_by_id = AsyncMock(return_value=prompt)
+    mock_session.commit.side_effect = SQLAlchemyError("Database error")
+
+    service = PromptService(
+        session=mock_session,
+        repository=mock_repository,
+    )
+
+    with pytest.raises(SQLAlchemyError):
+        await service.activate_prompt(2)
+
+    mock_session.rollback.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_delete_prompt_deletes_inactive_prompt() -> None:
+    """Delete an existing inactive prompt."""
+
+    mock_session = create_mock_session()
+    mock_repository = MagicMock()
+
+    prompt = MagicMock()
+    prompt.is_active = False
+
+    mock_repository.get_by_id = AsyncMock(return_value=prompt)
+
+    service = PromptService(
+        session=mock_session,
+        repository=mock_repository,
+    )
+
+    result = await service.delete_prompt(2)
+
+    assert result is None
+
+    mock_repository.get_by_id.assert_awaited_once_with(2)
+    mock_session.delete.assert_awaited_once_with(prompt)
+    mock_session.commit.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_delete_prompt_rejects_active_prompt() -> None:
+    """Reject deletion of the currently active prompt."""
+
+    mock_session = create_mock_session()
+    mock_repository = MagicMock()
+
+    prompt = MagicMock()
+    prompt.is_active = True
+
+    mock_repository.get_by_id = AsyncMock(return_value=prompt)
+
+    service = PromptService(
+        session=mock_session,
+        repository=mock_repository,
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        await service.delete_prompt(1)
+
+    assert exc_info.value.status_code == status.HTTP_409_CONFLICT
+    assert exc_info.value.detail == "Active prompt cannot be deleted."
+
+    mock_session.delete.assert_not_awaited()
+    mock_session.commit.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_delete_prompt_raises_404_when_prompt_does_not_exist() -> None:
+    """Raise 404 when attempting to delete a missing prompt."""
+
+    mock_session = create_mock_session()
+    mock_repository = MagicMock()
+    mock_repository.get_by_id = AsyncMock(return_value=None)
+
+    service = PromptService(
+        session=mock_session,
+        repository=mock_repository,
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        await service.delete_prompt(999)
+
+    assert exc_info.value.status_code == status.HTTP_404_NOT_FOUND
+    assert exc_info.value.detail == "Prompt not found."
+
+    mock_session.delete.assert_not_awaited()
+    mock_session.commit.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_delete_prompt_rolls_back_on_database_error() -> None:
+    """Rollback the transaction when prompt deletion fails."""
+
+    mock_session = create_mock_session()
+    mock_repository = MagicMock()
+
+    prompt = MagicMock()
+    prompt.is_active = False
+
+    mock_repository.get_by_id = AsyncMock(return_value=prompt)
+    mock_session.commit.side_effect = SQLAlchemyError("Database error")
+
+    service = PromptService(
+        session=mock_session,
+        repository=mock_repository,
+    )
+
+    with pytest.raises(SQLAlchemyError):
+        await service.delete_prompt(2)
+
+    mock_session.delete.assert_awaited_once_with(prompt)
     mock_session.rollback.assert_awaited_once()

@@ -320,3 +320,378 @@ def test_create_prompt_endpoint_returns_service_http_exception() -> None:
 
     finally:
         _clear_overrides()
+
+
+def test_get_prompts_endpoint_success() -> None:
+    """Return all prompts through the HTTP API."""
+
+    mock_service = AsyncMock()
+
+    prompts = [
+        Prompt(
+            id=2,
+            name="Newest Prompt",
+            content="Newest prompt content.",
+            is_active=True,
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+        ),
+        Prompt(
+            id=1,
+            name="Older Prompt",
+            content="Older prompt content.",
+            is_active=False,
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+        ),
+    ]
+
+    mock_service.get_prompts.return_value = prompts
+
+    _override_prompt_service(mock_service)
+
+    try:
+        response = client.get("/prompts")
+
+        assert response.status_code == status.HTTP_200_OK
+
+        data = response.json()
+
+        assert len(data) == 2
+        assert data[0]["id"] == 2
+        assert data[0]["name"] == "Newest Prompt"
+        assert data[0]["is_active"] is True
+        assert data[1]["id"] == 1
+        assert data[1]["name"] == "Older Prompt"
+        assert data[1]["is_active"] is False
+
+        mock_service.get_prompts.assert_awaited_once_with()
+
+    finally:
+        _clear_overrides()
+
+
+def test_get_prompt_endpoint_success() -> None:
+    """Return a single prompt through the HTTP API."""
+
+    mock_service = AsyncMock()
+
+    prompt = Prompt(
+        id=1,
+        name="Existing Prompt",
+        content="Existing prompt content.",
+        is_active=True,
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
+    )
+
+    mock_service.get_prompt.return_value = prompt
+
+    _override_prompt_service(mock_service)
+
+    try:
+        response = client.get("/prompts/1")
+
+        assert response.status_code == status.HTTP_200_OK
+
+        data = response.json()
+
+        assert data["id"] == 1
+        assert data["name"] == "Existing Prompt"
+        assert data["content"] == "Existing prompt content."
+        assert data["is_active"] is True
+
+        mock_service.get_prompt.assert_awaited_once_with(1)
+
+    finally:
+        _clear_overrides()
+
+
+def test_get_prompt_endpoint_returns_404() -> None:
+    """Return 404 when the requested prompt does not exist."""
+
+    mock_service = AsyncMock()
+
+    mock_service.get_prompt.side_effect = HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="Prompt not found.",
+    )
+
+    _override_prompt_service(mock_service)
+
+    try:
+        response = client.get("/prompts/999")
+
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+        assert response.json() == {"detail": "Prompt not found."}
+
+        mock_service.get_prompt.assert_awaited_once_with(999)
+
+    finally:
+        _clear_overrides()
+
+
+def test_update_prompt_endpoint_success() -> None:
+    """Update a prompt through the HTTP API."""
+
+    mock_service = AsyncMock()
+
+    updated_prompt = Prompt(
+        id=1,
+        name="Updated Prompt",
+        content="Updated prompt content.",
+        is_active=True,
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
+    )
+
+    mock_service.update_prompt.return_value = updated_prompt
+
+    _override_prompt_service(mock_service)
+
+    payload = {
+        "name": "Updated Prompt",
+        "content": "Updated prompt content.",
+    }
+
+    try:
+        response = client.patch(
+            "/prompts/1",
+            json=payload,
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+
+        data = response.json()
+
+        assert data["id"] == 1
+        assert data["name"] == "Updated Prompt"
+        assert data["content"] == "Updated prompt content."
+        assert data["is_active"] is True
+
+        mock_service.update_prompt.assert_awaited_once()
+
+        call = mock_service.update_prompt.await_args
+
+        assert call.kwargs["prompt_id"] == 1
+        assert call.kwargs["prompt_data"].name == "Updated Prompt"
+        assert call.kwargs["prompt_data"].content == "Updated prompt content."
+
+    finally:
+        _clear_overrides()
+
+
+def test_update_prompt_endpoint_accepts_content_only() -> None:
+    """Allow updating prompt content without changing its name."""
+
+    mock_service = AsyncMock()
+
+    updated_prompt = Prompt(
+        id=1,
+        name="Existing Prompt",
+        content="Completely rewritten prompt content.",
+        is_active=False,
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
+    )
+
+    mock_service.update_prompt.return_value = updated_prompt
+
+    _override_prompt_service(mock_service)
+
+    payload = {
+        "content": "Completely rewritten prompt content.",
+    }
+
+    try:
+        response = client.patch(
+            "/prompts/1",
+            json=payload,
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.json()["content"] == "Completely rewritten prompt content."
+
+        call = mock_service.update_prompt.await_args
+
+        assert call.kwargs["prompt_data"].name is None
+        assert (
+            call.kwargs["prompt_data"].content == "Completely rewritten prompt content."
+        )
+
+    finally:
+        _clear_overrides()
+
+
+def test_update_prompt_endpoint_returns_404() -> None:
+    """Return 404 when updating a missing prompt."""
+
+    mock_service = AsyncMock()
+
+    mock_service.update_prompt.side_effect = HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="Prompt not found.",
+    )
+
+    _override_prompt_service(mock_service)
+
+    try:
+        response = client.patch(
+            "/prompts/999",
+            json={
+                "content": "Updated prompt content.",
+            },
+        )
+
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+        assert response.json() == {"detail": "Prompt not found."}
+
+    finally:
+        _clear_overrides()
+
+
+def test_activate_prompt_endpoint_success() -> None:
+    """Activate a prompt through the HTTP API."""
+
+    mock_service = AsyncMock()
+
+    activated_prompt = Prompt(
+        id=2,
+        name="Activated Prompt",
+        content="Activated prompt content.",
+        is_active=True,
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
+    )
+
+    mock_service.activate_prompt.return_value = activated_prompt
+
+    _override_prompt_service(mock_service)
+
+    try:
+        response = client.patch("/prompts/2/activate")
+
+        assert response.status_code == status.HTTP_200_OK
+
+        data = response.json()
+
+        assert data["id"] == 2
+        assert data["name"] == "Activated Prompt"
+        assert data["is_active"] is True
+
+        mock_service.activate_prompt.assert_awaited_once_with(2)
+
+    finally:
+        _clear_overrides()
+
+
+def test_activate_prompt_endpoint_returns_404() -> None:
+    """Return 404 when activating a missing prompt."""
+
+    mock_service = AsyncMock()
+
+    mock_service.activate_prompt.side_effect = HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="Prompt not found.",
+    )
+
+    _override_prompt_service(mock_service)
+
+    try:
+        response = client.patch("/prompts/999/activate")
+
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+        assert response.json() == {"detail": "Prompt not found."}
+
+        mock_service.activate_prompt.assert_awaited_once_with(999)
+
+    finally:
+        _clear_overrides()
+
+
+def test_activate_prompt_endpoint_rejects_invalid_id() -> None:
+    """Return validation error when prompt ID is not an integer."""
+
+    mock_service = AsyncMock()
+
+    _override_prompt_service(mock_service)
+
+    try:
+        response = client.patch("/prompts/not-an-integer/activate")
+
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+
+        mock_service.activate_prompt.assert_not_awaited()
+
+    finally:
+        _clear_overrides()
+
+
+def test_delete_prompt_endpoint_success() -> None:
+    """Delete an inactive prompt through the HTTP API."""
+
+    mock_service = AsyncMock()
+    mock_service.delete_prompt.return_value = None
+
+    _override_prompt_service(mock_service)
+
+    try:
+        response = client.delete("/prompts/2")
+
+        assert response.status_code == status.HTTP_204_NO_CONTENT
+        assert response.content == b""
+
+        mock_service.delete_prompt.assert_awaited_once_with(2)
+
+    finally:
+        _clear_overrides()
+
+
+def test_delete_prompt_endpoint_returns_409_for_active_prompt() -> None:
+    """Return 409 when attempting to delete the active prompt."""
+
+    mock_service = AsyncMock()
+
+    mock_service.delete_prompt.side_effect = HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail="Active prompt cannot be deleted.",
+    )
+
+    _override_prompt_service(mock_service)
+
+    try:
+        response = client.delete("/prompts/1")
+
+        assert response.status_code == status.HTTP_409_CONFLICT
+        assert response.json() == {
+            "detail": "Active prompt cannot be deleted.",
+        }
+
+        mock_service.delete_prompt.assert_awaited_once_with(1)
+
+    finally:
+        _clear_overrides()
+
+
+def test_delete_prompt_endpoint_returns_404() -> None:
+    """Return 404 when deleting a missing prompt."""
+
+    mock_service = AsyncMock()
+
+    mock_service.delete_prompt.side_effect = HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="Prompt not found.",
+    )
+
+    _override_prompt_service(mock_service)
+
+    try:
+        response = client.delete("/prompts/999")
+
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+        assert response.json() == {"detail": "Prompt not found."}
+
+        mock_service.delete_prompt.assert_awaited_once_with(999)
+
+    finally:
+        _clear_overrides()
