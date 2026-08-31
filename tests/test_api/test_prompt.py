@@ -429,3 +429,122 @@ def test_get_prompt_endpoint_returns_404() -> None:
 
     finally:
         _clear_overrides()
+
+
+def test_update_prompt_endpoint_success() -> None:
+    """Update a prompt through the HTTP API."""
+
+    mock_service = AsyncMock()
+
+    updated_prompt = Prompt(
+        id=1,
+        name="Updated Prompt",
+        content="Updated prompt content.",
+        is_active=True,
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
+    )
+
+    mock_service.update_prompt.return_value = updated_prompt
+
+    _override_prompt_service(mock_service)
+
+    payload = {
+        "name": "Updated Prompt",
+        "content": "Updated prompt content.",
+    }
+
+    try:
+        response = client.patch(
+            "/prompts/1",
+            json=payload,
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+
+        data = response.json()
+
+        assert data["id"] == 1
+        assert data["name"] == "Updated Prompt"
+        assert data["content"] == "Updated prompt content."
+        assert data["is_active"] is True
+
+        mock_service.update_prompt.assert_awaited_once()
+
+        call = mock_service.update_prompt.await_args
+
+        assert call.kwargs["prompt_id"] == 1
+        assert call.kwargs["prompt_data"].name == "Updated Prompt"
+        assert call.kwargs["prompt_data"].content == "Updated prompt content."
+
+    finally:
+        _clear_overrides()
+
+
+def test_update_prompt_endpoint_accepts_content_only() -> None:
+    """Allow updating prompt content without changing its name."""
+
+    mock_service = AsyncMock()
+
+    updated_prompt = Prompt(
+        id=1,
+        name="Existing Prompt",
+        content="Completely rewritten prompt content.",
+        is_active=False,
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
+    )
+
+    mock_service.update_prompt.return_value = updated_prompt
+
+    _override_prompt_service(mock_service)
+
+    payload = {
+        "content": "Completely rewritten prompt content.",
+    }
+
+    try:
+        response = client.patch(
+            "/prompts/1",
+            json=payload,
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.json()["content"] == "Completely rewritten prompt content."
+
+        call = mock_service.update_prompt.await_args
+
+        assert call.kwargs["prompt_data"].name is None
+        assert (
+            call.kwargs["prompt_data"].content == "Completely rewritten prompt content."
+        )
+
+    finally:
+        _clear_overrides()
+
+
+def test_update_prompt_endpoint_returns_404() -> None:
+    """Return 404 when updating a missing prompt."""
+
+    mock_service = AsyncMock()
+
+    mock_service.update_prompt.side_effect = HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="Prompt not found.",
+    )
+
+    _override_prompt_service(mock_service)
+
+    try:
+        response = client.patch(
+            "/prompts/999",
+            json={
+                "content": "Updated prompt content.",
+            },
+        )
+
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+        assert response.json() == {"detail": "Prompt not found."}
+
+    finally:
+        _clear_overrides()

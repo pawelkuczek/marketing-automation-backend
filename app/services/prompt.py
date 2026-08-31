@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.prompt import Prompt
 from app.repositories.prompt import PromptRepository
-from app.schemas.prompt import PromptCreate
+from app.schemas.prompt import PromptCreate, PromptUpdate
 
 
 class PromptService:
@@ -38,6 +38,33 @@ class PromptService:
             )
 
         return prompt
+
+    async def update_prompt(
+        self,
+        prompt_id: int,
+        prompt_data: PromptUpdate,
+    ) -> Prompt:
+        """Update editable properties of an existing prompt."""
+
+        prompt = await self.get_prompt(prompt_id)
+
+        update_data = prompt_data.model_dump(
+            exclude_unset=True,
+            exclude_none=True,
+        )
+
+        for field, value in update_data.items():
+            setattr(prompt, field, value)
+
+        try:
+            await self.session.commit()
+            await self.session.refresh(prompt)
+
+            return prompt
+
+        except SQLAlchemyError:
+            await self.session.rollback()
+            raise
 
     async def create_new_active_prompt(
         self,

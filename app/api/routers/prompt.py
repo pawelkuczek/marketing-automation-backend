@@ -5,7 +5,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.repositories.prompt import PromptRepository
-from app.schemas.prompt import PromptCreate, PromptResponse
+from app.schemas.prompt import (
+    PromptCreate,
+    PromptResponse,
+    PromptUpdate,
+)
 from app.services.prompt import PromptService
 
 router = APIRouter(prefix="/prompts", tags=["Prompts"])
@@ -60,6 +64,29 @@ async def get_prompt(
     """Return a system prompt by ID."""
 
     prompt = await service.get_prompt(prompt_id)
+
+    return PromptResponse.model_validate(prompt)
+
+
+@router.patch(
+    "/{prompt_id}",
+    response_model=PromptResponse,
+    summary="Update an AI prompt",
+)
+async def update_prompt(
+    prompt_id: int,
+    prompt_in: PromptUpdate,
+    service: Annotated[
+        PromptService,
+        Depends(get_prompt_service),
+    ],
+) -> PromptResponse:
+    """Update an existing system prompt."""
+
+    prompt = await service.update_prompt(
+        prompt_id=prompt_id,
+        prompt_data=prompt_in,
+    )
 
     return PromptResponse.model_validate(prompt)
 
