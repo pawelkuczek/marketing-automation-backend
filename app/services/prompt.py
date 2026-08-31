@@ -91,6 +91,28 @@ class PromptService:
             await self.session.rollback()
             raise
 
+    async def delete_prompt(
+        self,
+        prompt_id: int,
+    ) -> None:
+        """Delete an inactive prompt."""
+
+        prompt = await self.get_prompt(prompt_id)
+
+        if prompt.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Active prompt cannot be deleted.",
+            )
+
+        try:
+            await self.session.delete(prompt)
+            await self.session.commit()
+
+        except SQLAlchemyError:
+            await self.session.rollback()
+            raise
+
     async def create_new_active_prompt(
         self,
         prompt_data: PromptCreate,

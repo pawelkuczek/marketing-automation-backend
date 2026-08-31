@@ -110,6 +110,23 @@ async def activate_prompt(
     return PromptResponse.model_validate(prompt)
 
 
+@router.delete(
+    "/{prompt_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete an AI prompt",
+)
+async def delete_prompt(
+    prompt_id: int,
+    service: Annotated[
+        PromptService,
+        Depends(get_prompt_service),
+    ],
+) -> None:
+    """Delete an inactive system prompt."""
+
+    await service.delete_prompt(prompt_id)
+
+
 @router.post(
     "",
     response_model=PromptResponse,

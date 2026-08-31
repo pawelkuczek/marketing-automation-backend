@@ -625,3 +625,73 @@ def test_activate_prompt_endpoint_rejects_invalid_id() -> None:
 
     finally:
         _clear_overrides()
+
+
+def test_delete_prompt_endpoint_success() -> None:
+    """Delete an inactive prompt through the HTTP API."""
+
+    mock_service = AsyncMock()
+    mock_service.delete_prompt.return_value = None
+
+    _override_prompt_service(mock_service)
+
+    try:
+        response = client.delete("/prompts/2")
+
+        assert response.status_code == status.HTTP_204_NO_CONTENT
+        assert response.content == b""
+
+        mock_service.delete_prompt.assert_awaited_once_with(2)
+
+    finally:
+        _clear_overrides()
+
+
+def test_delete_prompt_endpoint_returns_409_for_active_prompt() -> None:
+    """Return 409 when attempting to delete the active prompt."""
+
+    mock_service = AsyncMock()
+
+    mock_service.delete_prompt.side_effect = HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail="Active prompt cannot be deleted.",
+    )
+
+    _override_prompt_service(mock_service)
+
+    try:
+        response = client.delete("/prompts/1")
+
+        assert response.status_code == status.HTTP_409_CONFLICT
+        assert response.json() == {
+            "detail": "Active prompt cannot be deleted.",
+        }
+
+        mock_service.delete_prompt.assert_awaited_once_with(1)
+
+    finally:
+        _clear_overrides()
+
+
+def test_delete_prompt_endpoint_returns_404() -> None:
+    """Return 404 when deleting a missing prompt."""
+
+    mock_service = AsyncMock()
+
+    mock_service.delete_prompt.side_effect = HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="Prompt not found.",
+    )
+
+    _override_prompt_service(mock_service)
+
+    try:
+        response = client.delete("/prompts/999")
+
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+        assert response.json() == {"detail": "Prompt not found."}
+
+        mock_service.delete_prompt.assert_awaited_once_with(999)
+
+    finally:
+        _clear_overrides()
