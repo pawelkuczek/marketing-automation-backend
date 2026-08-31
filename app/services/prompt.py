@@ -1,3 +1,6 @@
+from collections.abc import Sequence
+
+from fastapi import HTTPException, status
 from sqlalchemy import update
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,6 +20,24 @@ class PromptService:
     ) -> None:
         self.session = session
         self.repository = repository
+
+    async def get_prompts(self) -> Sequence[Prompt]:
+        """Return all available prompts."""
+
+        return await self.repository.get_all()
+
+    async def get_prompt(self, prompt_id: int) -> Prompt:
+        """Return a prompt by ID."""
+
+        prompt = await self.repository.get_by_id(prompt_id)
+
+        if prompt is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Prompt not found.",
+            )
+
+        return prompt
 
     async def create_new_active_prompt(
         self,

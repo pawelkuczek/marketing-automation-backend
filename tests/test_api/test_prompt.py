@@ -320,3 +320,112 @@ def test_create_prompt_endpoint_returns_service_http_exception() -> None:
 
     finally:
         _clear_overrides()
+
+
+def test_get_prompts_endpoint_success() -> None:
+    """Return all prompts through the HTTP API."""
+
+    mock_service = AsyncMock()
+
+    prompts = [
+        Prompt(
+            id=2,
+            name="Newest Prompt",
+            content="Newest prompt content.",
+            is_active=True,
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+        ),
+        Prompt(
+            id=1,
+            name="Older Prompt",
+            content="Older prompt content.",
+            is_active=False,
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+        ),
+    ]
+
+    mock_service.get_prompts.return_value = prompts
+
+    _override_prompt_service(mock_service)
+
+    try:
+        response = client.get("/prompts")
+
+        assert response.status_code == status.HTTP_200_OK
+
+        data = response.json()
+
+        assert len(data) == 2
+        assert data[0]["id"] == 2
+        assert data[0]["name"] == "Newest Prompt"
+        assert data[0]["is_active"] is True
+        assert data[1]["id"] == 1
+        assert data[1]["name"] == "Older Prompt"
+        assert data[1]["is_active"] is False
+
+        mock_service.get_prompts.assert_awaited_once_with()
+
+    finally:
+        _clear_overrides()
+
+
+def test_get_prompt_endpoint_success() -> None:
+    """Return a single prompt through the HTTP API."""
+
+    mock_service = AsyncMock()
+
+    prompt = Prompt(
+        id=1,
+        name="Existing Prompt",
+        content="Existing prompt content.",
+        is_active=True,
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
+    )
+
+    mock_service.get_prompt.return_value = prompt
+
+    _override_prompt_service(mock_service)
+
+    try:
+        response = client.get("/prompts/1")
+
+        assert response.status_code == status.HTTP_200_OK
+
+        data = response.json()
+
+        assert data["id"] == 1
+        assert data["name"] == "Existing Prompt"
+        assert data["content"] == "Existing prompt content."
+        assert data["is_active"] is True
+
+        mock_service.get_prompt.assert_awaited_once_with(1)
+
+    finally:
+        _clear_overrides()
+
+
+def test_get_prompt_endpoint_returns_404() -> None:
+    """Return 404 when the requested prompt does not exist."""
+
+    mock_service = AsyncMock()
+
+    mock_service.get_prompt.side_effect = HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="Prompt not found.",
+    )
+
+    _override_prompt_service(mock_service)
+
+    try:
+        response = client.get("/prompts/999")
+
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+        assert response.json() == {"detail": "Prompt not found."}
+
+        mock_service.get_prompt.assert_awaited_once_with(999)
+
+    finally:
+        _clear_overrides()

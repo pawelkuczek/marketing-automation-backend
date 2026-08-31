@@ -23,6 +23,22 @@ class PromptCreate(PromptBase):
     """Define data required to create a new prompt."""
 
 
+class PromptUpdate(BaseModel):
+    """Define optional prompt properties that can be updated."""
+
+    name: str | None = Field(
+        default=None,
+        min_length=3,
+        max_length=100,
+        description="The unique name of the prompt template.",
+    )
+    content: str | None = Field(
+        default=None,
+        min_length=10,
+        description="The system prompt instructions for the AI.",
+    )
+
+
 class PromptResponse(PromptBase):
     """Represent a prompt returned by the API."""
 
