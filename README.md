@@ -252,6 +252,18 @@ docker-compose.yml
 alembic.ini
 requirements.txt
 ```
+## Frontend
+
+A separate React + TypeScript frontend is available here:
+
+[marketing-automation-frontend](https://github.com/pawelkuczek/marketing-automation-frontend)
+
+It provides the user interface for:
+
+- prompt management
+- Excel calendar upload and processing
+- backend validation and API error handling
+- processed file download
 
 ## Getting started
 
@@ -482,3 +494,4 @@ The goal is not to replace the existing planning process, but to remove repetiti
 The marketer continues preparing the calendar in a familiar Excel format, while the application identifies unfinished entries, generates the required content, and returns the completed workbook in the same format.
 
 Beyond solving that practical problem, the project demonstrates the design of a Python backend involving asynchronous APIs, relational database persistence, external AI integration, spreadsheet processing, automated testing, migrations, and separation of responsibilities.
+
