@@ -2,7 +2,7 @@ import asyncio
 from logging.config import fileConfig
 
 from alembic import context
-from sqlalchemy import pool
+from sqlalchemy import URL, pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
@@ -17,16 +17,22 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 
+def get_database_url() -> str:
+    """Return the database URL without masking the password."""
+
+    database_url = settings.database_url
+
+    if isinstance(database_url, URL):
+        return database_url.render_as_string(hide_password=False)
+
+    return database_url
+
+
 def run_migrations_offline() -> None:
     """Run migrations in offline mode."""
 
-    url = config.get_main_option(
-        "sqlalchemy.url",
-        str(settings.database_url),
-    )
-
     context.configure(
-        url=url,
+        url=get_database_url(),
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
@@ -57,7 +63,7 @@ async def run_async_migrations() -> None:
         {},
     )
 
-    configuration["sqlalchemy.url"] = str(settings.database_url)
+    configuration["sqlalchemy.url"] = get_database_url()
 
     connectable = async_engine_from_config(
         configuration,
