@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routers import excel
 from app.api.routers import prompt as prompt_router
+from app.core.config import settings
 
 logging.basicConfig(
     level=logging.INFO,
@@ -25,7 +26,7 @@ def create_app() -> FastAPI:
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:5173"],
+        allow_origins=settings.cors_origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -37,6 +38,7 @@ def create_app() -> FastAPI:
     @app.get("/health")
     async def health_check() -> dict[str, str]:
         """Return the application health status."""
+
         return {"status": "ok"}
 
     return app
